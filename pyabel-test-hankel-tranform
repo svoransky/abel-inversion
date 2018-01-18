@@ -1,0 +1,97 @@
+import numpy as np
+from scipy.special import jn, jn_zeros
+import matplotlib.pyplot as plt
+
+def construct_dht_matrix(N, nu  = 0, b = 1):
+    m = np.arange(0,N).astype('float')
+    n = np.arange(0,N).astype('float')
+    return b * jn(nu, np.outer(b*m, n/N))
+
+def dht(X, d = 1, nu = 0, axis=-1, b = 1):
+    N = X.shape[axis]
+    
+    prefac = d**2
+    m = np.arange(0,N)
+    freq = m/(float(d)*N)
+    
+    F = construct_dht_matrix(N,nu,b)*m
+    return prefac * np.tensordot(F,X, axes=([1],[axis])), freq
+
+
+def Hankel(F, nu=0):
+    n = F.size
+    
+    Nyquist = 1/(2*n)
+
+    f = np.zeros_like(F)
+    i = np.arange(n)
+
+    for j in i:
+       q = Nyquist*j
+       f[:] += q*F[j]*jn(nu, 2*np.pi*q*i[:]) 
+    
+    return f
+    
+    # transform pairs
+def f(r, nu, a):   # Eq. (82)
+    return np.exp(-(r*a)**2)*(r**nu)
+
+def F(rho, nu, a): # Eq. (83)
+    return (rho**nu/(2*a**2)**(nu+1))*np.exp(-rho**2/4/a**2)
+
+def sinc(r, nu, a):   # Eq. (82) sinc function
+    return np.sin(a*r)/a/r
+
+def Sinc(rho, nu, a): # Eq. (83)
+    rhola = rho[rho < a]/a
+    rhoga = rho[rho > a]/a
+
+    dla = np.sqrt(1 - rhola**2)
+    dga = np.sqrt(rhoga**2 - 1)
+
+    la = np.cos(np.pi*nu/2)*(rhola**nu)/a**2/dla/(1 + dla)**nu
+
+    ga = np.sin(nu*np.arcsin(1/rhoga))/a**2/dga
+
+    return np.append(la, ga)
+    
+    # test the above transform pairs
+n = 501
+
+# inverse Hankel --------------
+a = 0.2
+nu = 1
+rho = np.linspace(0, 30, n)
+
+Frho = F(rho, nu, a)
+fhbasic = Hankel(Frho, nu)
+fh_analytical = f(rho, nu, a)
+fM, freq = dht(Frho, d = 1, nu = 0, axis=-1, b = 1)
+
+a = 5
+rho[0] = 1.0e-5
+Fsinc = Sinc(rho, nu, a)
+
+fhbasicSinc = Hankel(Fsinc, nu)
+fhanalySinc = sinc(rho, nu, a)
+
+# plot
+fig, (ax0, ax1) = plt.subplots(1, 2)
+ax0.plot(rho*1.11*np.pi/2, fhbasic*fh_analytical.max()/fhbasic.max(),
+         label='dht')
+ax0.plot(rho, fh_analytical, label='anal.')
+ax0.set_title(r'Gaussian transform pair $\nu=1$')
+ax0.axis(xmax=30)
+ax0.legend()
+ax0.set_xlabel(r'$r$')
+
+ax1.plot(rho*1.11*np.pi/2, fhbasicSinc*fhanalySinc.max()/fhbasicSinc.max(),
+         label='dht')
+ax1.plot(rho, fhanalySinc, label='anal.')
+ax1.set_title(r'Sinc transform pair $\nu=1$')
+ax1.axis(xmax=30)
+ax1.legend()
+ax1.set_xlabel(r'$r$')
+plt.show()
+
+
